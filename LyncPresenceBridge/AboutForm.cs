@@ -17,12 +17,12 @@ namespace LyncPresenceBridge
 
         private void linkLabel2_LinkClicked(object sender, LinkLabelLinkClickedEventArgs e)
         {
-            System.Diagnostics.Process.Start("https://www.uctrl.net");
+            // System.Diagnostics.Process.Start("https://www.uctrl.net");
         }
 
         private void linkLabel1_LinkClicked(object sender, LinkLabelLinkClickedEventArgs e)
         {
-            System.Diagnostics.Process.Start("https://github.com/uCtrlHQ/Lync-presence-bridge");
+            // System.Diagnostics.Process.Start("https://github.com/uCtrlHQ/Lync-presence-bridge");
         }
     }
 }

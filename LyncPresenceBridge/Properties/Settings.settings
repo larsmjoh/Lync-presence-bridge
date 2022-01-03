@@ -1,27 +1,35 @@
-﻿<?xml version='1.0' encoding='utf-8'?>
-<SettingsFile xmlns="http://schemas.microsoft.com/VisualStudio/2004/01/settings" CurrentProfile="(Default)" GeneratedClassNamespace="LyncPresenceBridge.Properties" GeneratedClassName="Settings">
-  <Profiles />
-  <Settings>
-    <Setting Name="ArduinoSerialPort" Type="System.Int32" Scope="User">
-      <Value Profile="(Default)">0</Value>
-    </Setting>
-    <Setting Name="ColorAvailable" Type="System.String" Scope="User">
-      <Value Profile="(Default)">255,0,0</Value>
-    </Setting>
-    <Setting Name="ColorAvailableIdle" Type="System.String" Scope="User">
-      <Value Profile="(Default)">255,255,0</Value>
-    </Setting>
-    <Setting Name="ColorBusy" Type="System.String" Scope="User">
-      <Value Profile="(Default)">0,0,255</Value>
-    </Setting>
-    <Setting Name="ColorBusyIdle" Type="System.String" Scope="User">
-      <Value Profile="(Default)">0,255,255</Value>
-    </Setting>
-    <Setting Name="ColorAway" Type="System.String" Scope="User">
-      <Value Profile="(Default)">0,50,0</Value>
-    </Setting>
-    <Setting Name="ColorOff" Type="System.String" Scope="User">
-      <Value Profile="(Default)">0,0,0</Value>
-    </Setting>
-  </Settings>
+﻿<?xml version="1.0" encoding="UTF-8"?>
+<SettingsFile xmlns="http://schemas.microsoft.com/VisualStudio/2004/01/settings" CurrentProfile="(Default)"
+              GeneratedClassNamespace="LyncPresenceBridge.Properties" GeneratedClassName="Settings">
+    <Profiles/>
+    <Settings>
+        <Setting Name="ArduinoSerialPort" Type="System.Int16" Scope="User">
+            <Value Profile="(Default)">4</Value>
+        </Setting>
+        <Setting Name="ColorFree" Type="System.Drawing.Color" Scope="User">
+            <Value Profile="(Default)">Green</Value>
+        </Setting>
+        <Setting Name="ColorFreeIdle" Type="System.Drawing.Color" Scope="User">
+            <Value Profile="(Default)">Green</Value>
+        </Setting>
+        <Setting Name="ColorBusy" Type="System.Drawing.Color" Scope="User">
+            <Value Profile="(Default)">Red</Value>
+        </Setting>
+        <Setting Name="ColorBusyIdle" Type="System.Drawing.Color" Scope="User">
+            <Value Profile="(Default)">Red</Value>
+        </Setting>
+        <Setting Name="ColorDnD" Type="System.Drawing.Color" Scope="User">
+            <Value Profile="(Default)">Red</Value>
+        </Setting>
+        <Setting Name="ColorAway" Type="System.Drawing.Color" Scope="User">
+            <Value Profile="(Default)">Yellow</Value>
+        </Setting>
+        <Setting Name="ColorOoO" Type="System.Drawing.Color" Scope="User">
+            <Value Profile="(Default)">Magenta</Value>
+        </Setting>
+        <Setting Name="ColorOff" Type="System.Drawing.Color" Scope="User">
+            <Value Profile="(Default)">Black</Value>
+        </Setting>
+    </Settings>
 </SettingsFile>
+

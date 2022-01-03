@@ -4,64 +4,42 @@ using System.Windows.Forms;
 
 using Microsoft.Lync.Model;
 
-using ThingM.Blink1;
-using ThingM.Blink1.ColorProcessor;
 using System.Management;
 using System.Diagnostics;
-using System.Threading;
 using System.Drawing;
 using Uctrl.Arduino;
 
 namespace LyncPresenceBridge
 {
-    class LyncConnectorAppContext : ApplicationContext
+    internal class LyncConnectorAppContext : ApplicationContext
     {
         private NotifyIcon trayIcon;
         private ContextMenuStrip trayIconContextMenu;
 
         private LyncClient lyncClient;
-        private Blink1 blink1 = new Blink1();
 
-        private Arduino arduino = new Arduino();
+        private readonly Arduino arduino = new Arduino();
 
         private ManagementEventWatcher usbWatcher;
 
         private bool isLyncIntegratedMode = true;
 
-        private static string[] colorAvailable = Properties.Settings.Default.ColorAvailable.Split(',');
-        private static string[] colorAvailableIdle = Properties.Settings.Default.ColorAvailableIdle.Split(',');
-        private static string[] colorBusy = Properties.Settings.Default.ColorBusy.Split(',');
-        private static string[] colorBusyIdle = Properties.Settings.Default.ColorBusyIdle.Split(',');
-        private static string[] colorAway = Properties.Settings.Default.ColorAway.Split(',');
-        private static string[] colorOff = Properties.Settings.Default.ColorOff.Split(',');
-
-        private Rgb blinkColorAvailable = new Rgb(0, 150, 17);
-        private Rgb blinkColorAvailableIdle = new Rgb(0, 150, 17);
-        private Rgb blinkColorBusy = new Rgb(150, 0, 0);
-        private Rgb blinkColorBusyIdle = new Rgb(150, 0, 0);
-        private Rgb blinkColorAway = new Rgb(150, 150, 0);
-        private Rgb blinkColorOff = new Rgb(0, 0, 0);
-
-        private byte[] arduinoColorAvailable = Array.ConvertAll(colorAvailable, s => Convert.ToByte(s));
-        private byte[] arduinoColorAvailableIdle = Array.ConvertAll(colorAvailableIdle, s => Convert.ToByte(s));
-        private byte[] arduinoColorBusy = Array.ConvertAll(colorBusy, s => Convert.ToByte(s));
-        private byte[] arduinoColorBusyIdle = Array.ConvertAll(colorBusyIdle, s => Convert.ToByte(s));
-        private byte[] arduinoColorAway = Array.ConvertAll(colorAway, s => Convert.ToByte(s));
-        private byte[] arduinoColorOff = Array.ConvertAll(colorOff, s => Convert.ToByte(s));
-
+        private static readonly Color ColorFree = Color.DarkGreen;
+        private static readonly Color ColorBusy = Color.DarkRed;
+        private static readonly Color ColorDnD = Color.Maroon;
+        private static readonly Color ColorAway = Color.DarkOrange;
+        private static readonly Color ColorOoO = Color.Fuchsia;
+        private static readonly Color ColorOff = Color.Black;
 
         public LyncConnectorAppContext()
         {
-            Application.ApplicationExit += new EventHandler(OnApplicationExit);
-            AppDomain.CurrentDomain.ProcessExit += new EventHandler(OnApplicationExit);
+            Application.ApplicationExit += OnApplicationExit;
+            AppDomain.CurrentDomain.ProcessExit += OnApplicationExit;
 
             // Setup UI, NotifyIcon
             InitializeComponent();
 
             trayIcon.Visible = true;
-
-            // Setup Blink
-            InitializeBlink1();
 
             // Open Arduino serial port it's not 0
             if (Properties.Settings.Default.ArduinoSerialPort > 0)
@@ -75,28 +53,8 @@ namespace LyncPresenceBridge
             // Setup Lync Client Connection
             GetLyncClient();
 
-            // Watch for USB Changes, try to monitor blink plugin/removal
-            InitializeUSBWatcher();
-
-        }
-
-        private bool InitializeBlink1()
-        {
-            try
-            {
-                blink1.Open();
-            }
-            catch (InvalidOperationException iox)
-            {
-                // No blink devices attached, switching to loacl mode (in the future) 
-                Debug.WriteLine(iox.ToString());
-            }
-            catch (Exception e)
-            {
-                Debug.WriteLine(e.ToString());
-            }
-
-            return blink1.IsConnected;
+            // Watch for USB Changes, try to monitor arduino plugin/removal
+            InitializeUsbWatcher();
 
         }
 
@@ -110,12 +68,14 @@ namespace LyncPresenceBridge
             // TrayIconContextMenu
             trayIconContextMenu = new ContextMenuStrip();
             trayIconContextMenu.SuspendLayout();
-            trayIconContextMenu.Name = "TrayIconContextMenu";
+            trayIconContextMenu.Name = "trayIconContextMenu";
 
-            // Tray Context Menuitems to set color
-            this.trayIconContextMenu.Items.Add("Available", null, new EventHandler(AvailableMenuItem_Click));
+            // Tray Context Menu items to set color
+            this.trayIconContextMenu.Items.Add("Free", null, new EventHandler(FreeMenuItem_Click));
             this.trayIconContextMenu.Items.Add("Busy", null, new EventHandler(BusyMenuItem_Click));
+            this.trayIconContextMenu.Items.Add("DnD", null, new EventHandler(DnDMenuItem_Click));
             this.trayIconContextMenu.Items.Add("Away", null, new EventHandler(AwayMenuItem_Click));
+            this.trayIconContextMenu.Items.Add("OoO", null, new EventHandler(OoOMenuItem_Click));
             this.trayIconContextMenu.Items.Add("Off", null, new EventHandler(OffMenuItem_Click));
 
             // Separation Line
@@ -123,9 +83,6 @@ namespace LyncPresenceBridge
 
             // About Form Line
             this.trayIconContextMenu.Items.Add("About", null, new EventHandler(aboutMenuItem_Click));
-
-            // Settings Form Line
-            this.trayIconContextMenu.Items.Add("Settings", null, new EventHandler(settingsMenuItem_Click));
 
             // Separation Line
             this.trayIconContextMenu.Items.Add(new ToolStripSeparator());
@@ -168,13 +125,10 @@ namespace LyncPresenceBridge
             }
         }
 
-        void SetLyncIntegrationMode(bool isLyncIntegrated)
+        private void SetLyncIntegrationMode(bool isLyncIntegrated)
         {
             isLyncIntegratedMode = isLyncIntegrated;
             if (isLyncIntegratedMode)
-            {
-            }
-            else
             {
             }
         }
@@ -182,103 +136,47 @@ namespace LyncPresenceBridge
         /// <summary>
         /// Read the current Availability Information from Lync/Skype for Business and set the color 
         /// </summary>
-        void SetCurrentContactState()
+        private void SetCurrentContactState()
         {
-            Rgb blinkColor = blinkColorOff;
-            byte[] arduinoLeds = arduinoColorOff;
-
             if (lyncClient.State == ClientState.SignedIn)
             {
-                ContactAvailability currentAvailability = (ContactAvailability)lyncClient.Self.Contact.GetContactInformation(ContactInformationType.Availability);
+                var currentAvailability = (ContactAvailability)lyncClient.Self.Contact.GetContactInformation(ContactInformationType.Availability);
+                var currentCalendarState = (ContactCalendarState)lyncClient.Self.Contact.GetContactInformation(ContactInformationType.CurrentCalendarState);
+                
                 switch (currentAvailability)
                 {
-                    case ContactAvailability.Busy:              // Busy
-                        blinkColor = blinkColorBusy;
-                        arduinoLeds = arduinoColorBusy;
+                    case ContactAvailability.None: // ???
+                        arduino.SetLEDs(currentCalendarState == ContactCalendarState.OutOfOffice ? ColorOoO : ColorOff);
+                        break;
+                    
+                    case ContactAvailability.Free: // Free
+                    case ContactAvailability.FreeIdle: // Free and idle
+                        arduino.SetLEDs(ColorFree);
                         break;
 
-                    case ContactAvailability.BusyIdle:          // Busy and idle
-                        blinkColor = blinkColorBusyIdle;
-                        arduinoLeds = arduinoColorBusyIdle;
+                    case ContactAvailability.Busy: // Busy
+                    case ContactAvailability.BusyIdle: // Busy and idle
+                        arduino.SetLEDs(ColorBusy);
                         break;
 
-                    case ContactAvailability.Free:              // Available
-                        blinkColor = blinkColorAvailable;
-                        arduinoLeds = arduinoColorAvailable;
+                    case ContactAvailability.DoNotDisturb: // Do not disturb
+                        arduino.SetLEDs(ColorDnD);
                         break;
 
-                    case ContactAvailability.FreeIdle:          // Available and idle
-                        blinkColor = blinkColorAvailableIdle;
-                        arduinoLeds = arduinoColorAvailableIdle;
+                    case ContactAvailability.TemporarilyAway: // Be right back
+                    case ContactAvailability.Away:            // Inactive/away, off work, appear away
+                        arduino.SetLEDs(currentCalendarState == ContactCalendarState.OutOfOffice ? ColorOoO : ColorAway);
                         break;
 
-                    case ContactAvailability.Away:              // Inactive/away, off work, appear away
-                    case ContactAvailability.TemporarilyAway:   // Be right back
-                        blinkColor = blinkColorAway;
-                        arduinoLeds = arduinoColorAway;
+                    case ContactAvailability.Offline: // Offline
+                        arduino.SetLEDs(currentCalendarState == ContactCalendarState.OutOfOffice ? ColorOoO : ColorOff);
                         break;
 
-                    case ContactAvailability.DoNotDisturb:      // Do not disturb
-                        blinkColor = blinkColorBusy;
-                        arduinoLeds = arduinoColorBusy;
-                        break;
-
-                    case ContactAvailability.Offline:           // Offline
-                        blinkColor = blinkColorOff;
-                        arduinoLeds = arduinoColorOff;
-                        break;
-
+                    case ContactAvailability.Invalid:
                     default:
+                        arduino.SetLEDs(ColorOff);
                         break;
                 }
-
-                SetBlink1State(blinkColor);
-                arduino.SetLEDs(arduinoLeds);
-
-                Debug.WriteLine(currentAvailability.ToString());
-            }
-        }
-
-        void SetBlink1State(Rgb color)
-        {
-            bool setColorResult = false;
-
-            if (blink1.IsConnected)
-            {
-                setColorResult = blink1.SetColor(color);
-                if (setColorResult)
-                {
-                    Debug.WriteLine("Successful set blink1 to {0},{1},{2}", color.Red, color.Green, color.Blue);
-                }
-                else
-                {
-                    Debug.WriteLine("Error setting blink1 to {0},{1},{2}", color.Red, color.Green, color.Blue);
-                }
-            }
-
-            SetIconState(color);
-
-        }
-
-        void SetIconState(Rgb color)
-        {
-                
-            using (Bitmap b = Bitmap.FromHicon(new Icon( Properties.Resources.blink_off , 48, 48).Handle))
-            {
-                if (color.Blue == 0 && color.Green == 0 && color.Red == 0)
-                {
-                    // if black , then we do not modify the image. We may need a picture unavailable build here.
-                }
-                else
-                {
-                    Graphics g = Graphics.FromImage(b);
-                    g.FillRegion(new SolidBrush(Color.FromArgb(color.Red, color.Green, color.Blue)), new Region(new Rectangle(20, 29, 22, 27)));
-
-                }
-
-                IntPtr Hicon = b.GetHicon();
-                Icon newIcon = Icon.FromHandle(Hicon);
-                trayIcon.Icon = newIcon;
             }
         }
 
@@ -312,9 +210,6 @@ namespace LyncPresenceBridge
 
                 case ClientState.Uninitialized:
                     break;
-
-                default:
-                    break;
             }
         }
 
@@ -335,15 +230,9 @@ namespace LyncPresenceBridge
             usbWatcher.Stop();
             usbWatcher.Dispose();
 
-            // Close blink Connection and switch off LED
-            if (blink1.IsConnected)
-            {
-                blink1.Close();
-            }
-
             if (arduino.Port.IsOpen)
             {
-                arduino.SetLEDs(arduinoColorOff);
+                arduino.SetLEDs(ColorOff);
                 arduino.Dispose();
             }
                 
@@ -353,49 +242,49 @@ namespace LyncPresenceBridge
         {
         }
 
-        private void CloseMenuItem_Click(object sender, EventArgs e)
+        private static void CloseMenuItem_Click(object sender, EventArgs e)
         {
             Application.Exit();
         }
 
-        private void aboutMenuItem_Click(object sender, EventArgs e)
+        private static void aboutMenuItem_Click(object sender, EventArgs e)
         {
-            AboutForm about = new AboutForm();
+            var about = new AboutForm();
             about.ShowDialog();
-        }
-
-        private void settingsMenuItem_Click(object sender, EventArgs e)
-        {
-            SettingsForm settings = new SettingsForm();
-            settings.ShowDialog();
         }
 
         private void OffMenuItem_Click(object sender, EventArgs e)
         {
-            SetBlink1State(blinkColorOff);
-            arduino.SetLEDs(arduinoColorOff);
+            arduino.SetLEDs(ColorOff);
+        }
+
+        private void OoOMenuItem_Click(object sender, EventArgs e)
+        {
+            arduino.SetLEDs(ColorOoO);
         }
 
         private void AwayMenuItem_Click(object sender, EventArgs e)
         {
-            SetBlink1State(blinkColorAway);
-            arduino.SetLEDs(arduinoColorAway);
+            arduino.SetLEDs(ColorAway);
         }
 
         private void BusyMenuItem_Click(object sender, EventArgs e)
         {
-            SetBlink1State(blinkColorBusy);
-            arduino.SetLEDs(arduinoColorBusy);
+            arduino.SetLEDs(ColorBusy);
         }
 
-        private void AvailableMenuItem_Click(object sender, EventArgs e)
+        private void DnDMenuItem_Click(object sender, EventArgs e)
         {
-            SetBlink1State(blinkColorAvailable);
-            arduino.SetLEDs(arduinoColorAvailable);
+            arduino.SetLEDs(ColorDnD);
         }
 
-        // Watch for USB changes to detect blink(1) removal
-        private void InitializeUSBWatcher()
+        private void FreeMenuItem_Click(object sender, EventArgs e)
+        {
+            arduino.SetLEDs(ColorFree);
+        }
+
+        // Watch for USB changes to detect arduino removal
+        private void InitializeUsbWatcher()
         {
             usbWatcher = new ManagementEventWatcher();
             var query = new WqlEventQuery("SELECT * FROM Win32_DeviceChangeEvent");
@@ -404,24 +293,8 @@ namespace LyncPresenceBridge
             usbWatcher.Start();
         }
 
-        private void watcher_EventArrived(object sender, EventArrivedEventArgs e)
+        private static void watcher_EventArrived(object sender, EventArrivedEventArgs e)
         {
-            // Check if blink was removed
-            // do not know what we do then, some hint to user?
-            InitializeBlink1();
-
-            if (blink1.IsConnected)
-            {
-                Debug.WriteLineIf(blink1.IsConnected, "USB change, Blink(1) available");
-
-                // timing problem in blink(1) if we set the state to fast after plugin change, wait 100ms
-                Thread.Sleep(100);
-                SetCurrentContactState();
-            }
-            else
-            {
-                Debug.WriteLineIf(!blink1.IsConnected, "USB change, Blink(1) not available");
-            }
         }
     }
 }

@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using System.IO;
 using System.IO.Ports;
 using System.Diagnostics;
+using System.Drawing;
 
 namespace Uctrl.Arduino
 {
@@ -55,13 +56,7 @@ namespace Uctrl.Arduino
 
             try
             {
-                //string response = string.Empty;
-
                 serialPort.WriteLine(command);
-
-                //response = serialPort.ReadLine();
-
-                //Debug.WriteLine("{0} --> {1}", string.Join(",", rgb), response);
 
                 return true;
             }
@@ -72,9 +67,9 @@ namespace Uctrl.Arduino
             }
         }
 
-        public bool SetLEDs(byte[] colors)
+        public bool SetLEDs(Color color)
         {
-            return Send(string.Join(",", colors));
+            return Send(color.ToArgb().ToString());
         }
     }
 }
